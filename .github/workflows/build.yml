@@ -114,13 +114,15 @@ jobs:
         run: |
           mkdir -p ${{ runner.temp }}/digests
           digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+          # Add variant and platform to digest filename for unique identification
+          echo "${{ matrix.platform }}${{ matrix.suffix }}" > "${{ runner.temp }}/digests/${digest#sha256:}.meta"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}.${{ matrix.platform }}${{ matrix.suffix }}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ env.PLATFORM_PAIR }}${{ env.VARIANT_SUFFIX }}
-          path: ${{ runner.temp }}/digests/*
+          name: digests-${{ matrix.platform }}${{ matrix.suffix }}
+          path: ${{ runner.temp }}/digests/*.${{ matrix.platform }}${{ matrix.suffix }}
           if-no-files-found: error
           retention-days: 1
 
@@ -170,10 +172,33 @@ jobs:
             TAG_ARGS="$TAG_ARGS -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag"
           done
 
+          # Only use digests for this variant
+          DIGEST_FILES=(*.${{ matrix.variant }})
+          DIGEST_ARGS=""
+          for file in "${DIGEST_FILES[@]}"; do
+            digest="${file%%.*}"
+            DIGEST_ARGS="$DIGEST_ARGS ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:$digest"
+          done
+
           # Create manifest list
-          docker buildx imagetools create $TAG_ARGS $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+          docker buildx imagetools create $TAG_ARGS $DIGEST_ARGS
 
       - name: Inspect image
         run: |
           SHORT_SHA=$(echo "${{ github.event.inputs.ESSENTIA_COMMIT }}" | cut -c1-7)
           docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}${{ matrix.variant }}
+
+  update-description:
+    runs-on: ubuntu-24.04
+    needs: merge
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: lagmoellertim/essentia
+          readme-filepath: ./README.md
