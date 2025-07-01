@@ -24,6 +24,7 @@ env:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: "essentia"
@@ -32,8 +33,17 @@ jobs:
               ENABLE_TENSORFLOW=0
               ENABLE_VAMP=1
               ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}
-            platforms: "linux/amd64,linux/arm64"
+            platform: "linux/amd64"
             runs-on: "ubuntu-24.04"
+            suffix: ""
+          - name: "essentia-arm64"
+            dockerfile: "Dockerfile"
+            args: |
+              ENABLE_TENSORFLOW=0
+              ENABLE_VAMP=1
+              ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}
+            platform: "linux/arm64"
+            runs-on: "ubuntu-24.04-arm"
             suffix: ""
           - name: "essentia-tensorflow"
             dockerfile: "Dockerfile"
@@ -42,8 +52,18 @@ jobs:
               TENSORFLOW_USE_GPU=0
               ENABLE_VAMP=1
               ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}
-            platforms: "linux/amd64,linux/arm64"
+            platform: "linux/amd64"
             runs-on: "ubuntu-24.04"
+            suffix: "-tensorflow"
+          - name: "essentia-tensorflow-arm64"
+            dockerfile: "Dockerfile"
+            args: |
+              ENABLE_TENSORFLOW=1
+              TENSORFLOW_USE_GPU=0
+              ENABLE_VAMP=1
+              ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}
+            platform: "linux/arm64"
+            runs-on: "ubuntu-24.04-arm"
             suffix: "-tensorflow"
           - name: "essentia-tensorflow-gpu"
             dockerfile: "Dockerfile"
@@ -52,7 +72,7 @@ jobs:
               TENSORFLOW_USE_GPU=1
               ENABLE_VAMP=1
               ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}
-            platforms: "linux/amd64"
+            platform: "linux/amd64"
             runs-on: "ubuntu-24.04"
             suffix: "-tensorflow-gpu"
 
@@ -61,6 +81,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "VARIANT_SUFFIX=${{ matrix.suffix }}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -72,52 +98,82 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Compute tags
-        id: compute-tags
-        run: |
-          SHORT_SHA=$(echo "${{ github.event.inputs.ESSENTIA_COMMIT }}" | cut -c1-7)
-          echo "Short SHA: $SHORT_SHA"
-          
-          TAGS="type=raw,value=${SHORT_SHA}${{ matrix.suffix }}"
-          echo "Base tag: ${SHORT_SHA}${{ matrix.suffix }}"
-          
-          if [[ "${{ github.event.inputs.LATEST }}" == "true" ]]; then
-            TAGS="$TAGS"$'\n'"type=raw,value=latest${{ matrix.suffix }}"
-            echo "Adding latest tag: latest${{ matrix.suffix }}"
-          fi
-          
-          if [[ -n "${{ github.event.inputs.TAG }}" ]]; then
-            TAGS="$TAGS"$'\n'"type=raw,value=${{ github.event.inputs.TAG }}${{ matrix.suffix }}"
-            echo "Adding custom tag: ${{ github.event.inputs.TAG }}${{ matrix.suffix }}"
-          fi
-          
-          echo "Final tags output:"
-          echo "$TAGS"
-          
-          echo "tags<<EOF" >> $GITHUB_OUTPUT
-          echo "$TAGS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            ${{ steps.compute-tags.outputs.tags }}
-
-      - name: Build and push Docker image
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ matrix.platforms }}
+          platforms: ${{ matrix.platform }}
           build-args: ${{ matrix.args }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Image digest
-        run: echo ${{ steps.build.outputs.digest }}
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}${{ env.VARIANT_SUFFIX }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-24.04
+    needs: build
+    strategy:
+      matrix:
+        variant: ["", "-tensorflow", "-tensorflow-gpu"]
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*${{ matrix.variant }}
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          SHORT_SHA=$(echo "${{ github.event.inputs.ESSENTIA_COMMIT }}" | cut -c1-7)
+          
+          # Build tags array
+          TAGS=("${SHORT_SHA}${{ matrix.variant }}")
+          
+          if [[ "${{ github.event.inputs.LATEST }}" == "true" ]]; then
+            TAGS+=("latest${{ matrix.variant }}")
+          fi
+          
+          if [[ -n "${{ github.event.inputs.TAG }}" ]]; then
+            TAGS+=("${{ github.event.inputs.TAG }}${{ matrix.variant }}")
+          fi
+          
+          # Create tag arguments
+          TAG_ARGS=""
+          for tag in "${TAGS[@]}"; do
+            TAG_ARGS="$TAG_ARGS -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag"
+          done
+          
+          # Create manifest list
+          docker buildx imagetools create $TAG_ARGS $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          SHORT_SHA=$(echo "${{ github.event.inputs.ESSENTIA_COMMIT }}" | cut -c1-7)
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}${{ matrix.variant }}
