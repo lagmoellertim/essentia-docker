@@ -4,9 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       ESSENTIA_COMMIT:
-        description: "Essentia commit hash or branch to build"
+        description: "Essentia commit hash build"
         required: true
-        default: "HEAD"
         type: string
       LATEST:
         description: "Also push as latest tag"
