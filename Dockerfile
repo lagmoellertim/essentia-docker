@@ -39,7 +39,8 @@ RUN apt-get update && \
     libass-dev \
     libfreetype6-dev \
     zlib1g-dev \
-    libssl-dev && \
+    libssl-dev \
+    $(if [ "$(dpkg --print-architecture)" = "amd64" ]; then echo "nasm yasm"; fi) && \
     rm -rf /var/lib/apt/lists/*
 
 ARG FFMPEG_VERSION
@@ -71,7 +72,10 @@ RUN if [ "$ENABLE_TENSORFLOW" = "1" ]; then \
     fi
 
 ARG ESSENTIA_COMMIT
-RUN git clone --depth 1 --branch "$ESSENTIA_COMMIT" https://github.com/MTG/essentia.git /opt/essentia
+RUN git clone --depth 1 https://github.com/MTG/essentia.git /opt/essentia && \
+    cd /opt/essentia && \
+    git fetch --depth 1 origin $ESSENTIA_COMMIT && \
+    git checkout $ESSENTIA_COMMIT
 
 WORKDIR /opt/essentia
 

@@ -12,6 +12,10 @@ on:
         required: false
         default: false
         type: boolean
+      ADDITIONAL_TAG:
+        description: "Additional tag prefix (optional)"
+        required: false
+        type: string
 
 env:
   REGISTRY: docker.io
@@ -22,41 +26,36 @@ jobs:
     strategy:
       matrix:
         include:
-          # Builds without tensorflow
           - name: "essentia"
             dockerfile: "Dockerfile"
             args: "ENABLE_TENSORFLOW=0,ENABLE_VAMP=1,ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}"
             platforms: "linux/amd64"
             runs-on: "ubuntu-latest"
-            tags: "${{ github.event.inputs.ESSENTIA_COMMIT }}${{ github.event.inputs.LATEST && ',latest' || '' }}"
+            suffix: ""
           - name: "essentia-arm64"
             dockerfile: "Dockerfile"
             args: "ENABLE_TENSORFLOW=0,ENABLE_VAMP=1,ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}"
             platforms: "linux/arm64"
             runs-on: "ubuntu-latest-arm64"
-            tags: "${{ github.event.inputs.ESSENTIA_COMMIT }}${{ github.event.inputs.LATEST && ',latest' || '' }}"
-
-          # Builds with tensorflow (CPU)
+            suffix: ""
           - name: "essentia-tensorflow"
             dockerfile: "Dockerfile"
             args: "ENABLE_TENSORFLOW=1,TENSORFLOW_USE_GPU=0,ENABLE_VAMP=1,ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}"
             platforms: "linux/amd64"
             runs-on: "ubuntu-latest"
-            tags: "${{ github.event.inputs.ESSENTIA_COMMIT }}-tensorflow${{ github.event.inputs.LATEST && ',latest-tensorflow' || '' }}"
+            suffix: "-tensorflow"
           - name: "essentia-tensorflow-arm64"
             dockerfile: "Dockerfile"
             args: "ENABLE_TENSORFLOW=1,TENSORFLOW_USE_GPU=0,ENABLE_VAMP=1,ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}"
             platforms: "linux/arm64"
             runs-on: "ubuntu-latest-arm64"
-            tags: "${{ github.event.inputs.ESSENTIA_COMMIT }}-tensorflow${{ github.event.inputs.LATEST && ',latest-tensorflow' || '' }}"
-
-          # Builds with tensorflow (GPU, only for amd64)
+            suffix: "-tensorflow"
           - name: "essentia-tensorflow-gpu"
             dockerfile: "Dockerfile"
             args: "ENABLE_TENSORFLOW=1,TENSORFLOW_USE_GPU=1,ENABLE_VAMP=1,ESSENTIA_COMMIT=${{ github.event.inputs.ESSENTIA_COMMIT }}"
             platforms: "linux/amd64"
             runs-on: "ubuntu-latest"
-            tags: "${{ github.event.inputs.ESSENTIA_COMMIT }}-tensorflow-gpu${{ github.event.inputs.LATEST && ',latest-tensorflow-gpu' || '' }}"
+            suffix: "-tensorflow-gpu"
 
     runs-on: ${{ matrix.runs-on }}
 
@@ -74,13 +73,25 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Compute tags
+        id: compute-tags
+        run: |
+          TAGS="${{ github.event.inputs.ESSENTIA_COMMIT }}${{ matrix.suffix }}"
+          if [[ "${{ github.event.inputs.LATEST }}" == "true" ]]; then
+            TAGS="$TAGS,latest${{ matrix.suffix }}"
+          fi
+          if [[ -n "${{ github.event.inputs.ADDITIONAL_TAG }}" ]]; then
+            TAGS="$TAGS,${{ github.event.inputs.ADDITIONAL_TAG }}${{ matrix.suffix }}"
+          fi
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ matrix.tags }}
+            type=raw,value=${{ steps.compute-tags.outputs.tags }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
