@@ -104,7 +104,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push by digest
+      - name: Build and push
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -112,7 +112,6 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           build-args: ${{ matrix.args }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VARIANT_NAME }}-${{ env.PLATFORM_PAIR }}
           cache-from: type=gha
