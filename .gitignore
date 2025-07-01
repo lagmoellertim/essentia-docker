@@ -1,0 +1,14 @@
+# IDE
+.vscode/
+.idea
+
+# macOS
+.DS_Store
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Environment
+.env
+.env.*
