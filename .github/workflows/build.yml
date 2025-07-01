@@ -76,13 +76,24 @@ jobs:
         id: compute-tags
         run: |
           SHORT_SHA=$(echo "${{ github.event.inputs.ESSENTIA_COMMIT }}" | cut -c1-7)
+          echo "Short SHA: $SHORT_SHA"
+          
           TAGS="type=raw,value=${SHORT_SHA}${{ matrix.suffix }}"
+          echo "Base tag: ${SHORT_SHA}${{ matrix.suffix }}"
+          
           if [[ "${{ github.event.inputs.LATEST }}" == "true" ]]; then
             TAGS="$TAGS"$'\n'"type=raw,value=latest${{ matrix.suffix }}"
+            echo "Adding latest tag: latest${{ matrix.suffix }}"
           fi
+          
           if [[ -n "${{ github.event.inputs.TAG }}" ]]; then
             TAGS="$TAGS"$'\n'"type=raw,value=${{ github.event.inputs.TAG }}${{ matrix.suffix }}"
+            echo "Adding custom tag: ${{ github.event.inputs.TAG }}${{ matrix.suffix }}"
           fi
+          
+          echo "Final tags output:"
+          echo "$TAGS"
+          
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo "$TAGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
