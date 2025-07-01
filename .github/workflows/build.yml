@@ -106,9 +106,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           build-args: ${{ matrix.args }}
-          # Temporary tag required for registry push - will be replaced by proper manifest tags
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:temp-${{ github.run_id }}-${{ strategy.job-index }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
