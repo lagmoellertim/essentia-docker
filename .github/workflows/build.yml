@@ -114,8 +114,8 @@ jobs:
           build-args: ${{ matrix.args }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ env.VARIANT_NAME }}-${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.VARIANT_NAME }}-${{ env.PLATFORM_PAIR }}
 
       - name: Export digest
         run: |
