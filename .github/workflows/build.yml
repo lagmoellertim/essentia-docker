@@ -114,15 +114,13 @@ jobs:
         run: |
           mkdir -p ${{ runner.temp }}/digests
           digest="${{ steps.build.outputs.digest }}"
-          # Add variant and platform to digest filename for unique identification
-          echo "${{ matrix.platform }}${{ matrix.suffix }}" > "${{ runner.temp }}/digests/${digest#sha256:}.meta"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}.${{ matrix.platform }}${{ matrix.suffix }}"
+          echo "${digest}" > "${{ runner.temp }}/digests/digest-${{ env.PLATFORM_PAIR }}${{ env.VARIANT_SUFFIX }}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.platform }}${{ matrix.suffix }}
-          path: ${{ runner.temp }}/digests/*.${{ matrix.platform }}${{ matrix.suffix }}
+          name: digests-${{ env.PLATFORM_PAIR }}${{ env.VARIANT_SUFFIX }}
+          path: ${{ runner.temp }}/digests/digest-${{ env.PLATFORM_PAIR }}${{ env.VARIANT_SUFFIX }}
           if-no-files-found: error
           retention-days: 1
 
@@ -173,11 +171,13 @@ jobs:
           done
 
           # Only use digests for this variant
-          DIGEST_FILES=(*.${{ matrix.variant }})
+          DIGEST_FILES=(digest-*${{ matrix.variant }})
           DIGEST_ARGS=""
           for file in "${DIGEST_FILES[@]}"; do
-            digest="${file%%.*}"
-            DIGEST_ARGS="$DIGEST_ARGS ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:$digest"
+            if [[ -f "$file" ]]; then
+              digest=$(cat "$file")
+              DIGEST_ARGS="$DIGEST_ARGS ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${digest}"
+            fi
           done
 
           # Create manifest list
