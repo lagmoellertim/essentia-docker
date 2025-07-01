@@ -106,6 +106,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           build-args: ${{ matrix.args }}
+          # Temporary tag required for registry push - will be replaced by proper manifest tags
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:temp-${{ github.run_id }}-${{ strategy.job-index }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -152,24 +154,24 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           SHORT_SHA=$(echo "${{ github.event.inputs.ESSENTIA_COMMIT }}" | cut -c1-7)
-          
+
           # Build tags array
           TAGS=("${SHORT_SHA}${{ matrix.variant }}")
-          
+
           if [[ "${{ github.event.inputs.LATEST }}" == "true" ]]; then
             TAGS+=("latest${{ matrix.variant }}")
           fi
-          
+
           if [[ -n "${{ github.event.inputs.TAG }}" ]]; then
             TAGS+=("${{ github.event.inputs.TAG }}${{ matrix.variant }}")
           fi
-          
+
           # Create tag arguments
           TAG_ARGS=""
           for tag in "${TAGS[@]}"; do
             TAG_ARGS="$TAG_ARGS -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag"
           done
-          
+
           # Create manifest list
           docker buildx imagetools create $TAG_ARGS $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
