@@ -33,7 +33,7 @@ jobs:
               ENABLE_VAMP: "1"
               ESSENTIA_COMMIT: "${{ github.event.inputs.ESSENTIA_COMMIT }}"
             platforms: "linux/amd64"
-            runs-on: "ubuntu-latest"
+            runs-on: "ubuntu-24.04"
             suffix: ""
           - name: "essentia-arm64"
             dockerfile: "Dockerfile"
@@ -52,7 +52,7 @@ jobs:
               ENABLE_VAMP: "1"
               ESSENTIA_COMMIT: "${{ github.event.inputs.ESSENTIA_COMMIT }}"
             platforms: "linux/amd64"
-            runs-on: "ubuntu-latest"
+            runs-on: "ubuntu-24.04"
             suffix: "-tensorflow"
           - name: "essentia-tensorflow-arm64"
             dockerfile: "Dockerfile"
@@ -72,7 +72,7 @@ jobs:
               ENABLE_VAMP: "1"
               ESSENTIA_COMMIT: "${{ github.event.inputs.ESSENTIA_COMMIT }}"
             platforms: "linux/amd64"
-            runs-on: "ubuntu-latest"
+            runs-on: "ubuntu-24.04"
             suffix: "-tensorflow-gpu"
 
     runs-on: ${{ matrix.runs-on }}
