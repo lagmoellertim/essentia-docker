@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/lagmoellertim/essentia-docker/actions/workflows/build.yml" target="_blank"><img src="https://github.com/lagmoellertim/essentia-docker/actions/workflows/build.yml/badge.svg" alt="Build Status"/></a>
+  <a href="https://hub.docker.com/r/lagmoellertim/essentia" target="_blank"><img src="https://img.shields.io/badge/dockerhub-lagmoellertim%2Fessentia-blue?logo=docker&style=flat" alt="DockerHub"/></a>
   <a href="https://github.com/lagmoellertim/essentia-docker/blob/main/LICENSE" target="_blank"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat" alt="MIT License Badge"/></a>
 </p>
 
